@@ -1,39 +1,26 @@
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+import logging
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-# دالة القائمة الرئيسية (تشبه القائمة التي أرسلتها في الصورة)
+# تفعيل تسجيل الأخطاء لرؤية ما يحدث
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🔥 نظام الفحص الذكي", callback_data='check')],
-        [InlineKeyboardButton("🌐 بيانات استخباراتية", callback_data='data')],
-        [InlineKeyboardButton("🛡 قائمة المحظورين", callback_data='blacklist')],
-        [InlineKeyboardButton("🛠 لوحة التحكم السيبرانية", callback_data='control')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🛡 **منظمة الاستخبارات السيبرانية**\n\nأهلاً بك أيها العميل. اختر المهمة المطلوبة:", reply_markup=reply_markup)
+    print("تم استلام أمر /start") # سيظهر هذا في الـ Logs في Railway
+    await update.message.reply_text("✅ البوت يعمل بنجاح ويستقبل الأوامر!")
 
-# معالجة ضغطات الأزرار
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    if query.data == 'check':
-        await query.edit_message_text("🔍 **نظام الفحص:** أرسل رقم الهاتف أو اليوزر للبدء...")
-    elif query.data == 'data':
-        await query.edit_message_text("🌐 **البيانات المتاحة:** جاري الوصول إلى قواعد البيانات المفتوحة...")
-    elif query.data == 'blacklist':
-        await query.edit_message_text("🛡 **قائمة المحظورين:** لا توجد بلاغات نشطة حالياً.")
-    elif query.data == 'control':
-        await query.edit_message_text("🛠 **التحكم:** البوت متصل بالخادم بنسبة 100%.")
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"تم استلام رسالة: {update.message.text}")
+    await update.message.reply_text(f"وصلني منك: {update.message.text}")
 
 if __name__ == '__main__':
     TOKEN = os.getenv("TOKEN")
-    app = ApplicationBuilder().token(TOKEN).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button))
-    
-    print("المنظومة تعمل الآن بكامل قوتها...")
-    app.run_polling()
-    
+    if not TOKEN:
+        print("خطأ: التوكن غير موجود!")
+    else:
+        app = ApplicationBuilder().token(TOKEN).build()
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
+        print("البوت بدأ الآن...")
+        app.run_polling()
