@@ -1,0 +1,97 @@
+import discord
+from discord.ext import commands
+import os
+from pydub import AudioSegment
+from threading import Thread
+from flask import Flask
+
+# --- كود الحفاظ على استيقاظ البوت 24 ساعة على Render ---
+app = Flask('')
+@app.route('/')
+def home():
+    return "البوت شغال ومستيقظ 24 ساعة!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+# --------------------------------------------------
+
+intents = discord.Intents.default()
+intents.message_content = True
+intents.voice_states = True
+intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+connections = {}
+ARCHIVE_CHANNEL_ID = 1508881801349959721
+
+@bot.event
+async def on_ready():
+    print(f"👑 [سيرفر الغاضبين]: البوت متصل وجاهز لحفظ الأصوات.")
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name="رومات الغاضبين 🔴"))
+
+@bot.command()
+async def start_record(ctx):
+    if ctx.author.voice:
+        channel = ctx.author.voice.channel
+        vc = await channel.connect()
+        connections.update({ctx.guild.id: vc})
+        
+        archive_channel = bot.get_channel(ARCHIVE_CHANNEL_ID) or ctx.channel
+        vc.start_recording(discord.sinks.MP3Sink(), once_done_recording, archive_channel)
+        await ctx.send("🔴 **بدأ التسجيل الاحترافي المزدوج!**\nسيتم حفظ الملفات تلقائياً في غرفة الأرشيف عند الإنهاء.")
+    else:
+        await ctx.send("يا غالي، لازم تدخل روم صوتي أولاً!")
+
+async def once_done_recording(sink, channel, *args):
+    await channel.send("⏹️ **تم إيقاف التسجيل.** جاري معالجة الملفات للأرشيف...")
+    recorded_files = []
+    
+    for user_id, audio in sink.audio_data.items():
+        try:
+            user = await bot.fetch_user(user_id)
+            file_name = f"{user.name}_voice.mp3"
+            with open(file_name, "wb") as f:
+                f.write(audio.file.read())
+            recorded_files.append(file_name)
+            await channel.send(content=f"👤 صوت العضو: {user.mention}", file=discord.File(file_name))
+        except Exception as e:
+            print(f"خطأ: {e}")
+
+    if recorded_files:
+        try:
+            base_audio = AudioSegment.from_mp3(recorded_files[0])
+            for file in recorded_files[1:]:
+                next_audio = AudioSegment.from_mp3(file)
+                base_audio = base_audio.overlay(next_audio, position=0)
+            
+            combined_file_name = "الغاضبين_النسخة_الجماعية.mp3"
+            base_audio.export(combined_file_name, format="mp3")
+            await channel.send(content="👥 **النسخة الجماعية الشاملة:**", file=discord.File(combined_file_name))
+            os.remove(combined_file_name)
+        except Exception as e:
+            await channel.send(f"⚠️ خطأ في الدمج: {e}")
+            
+        for file in recorded_files:
+            if os.path.exists(file):
+                os.remove(file)
+    else:
+        await channel.send("لا توجد تسجيلات لحفظها.")
+
+@bot.command()
+async def stop_record(ctx):
+    if ctx.guild.id in connections:
+        vc = connections[ctx.guild.id]
+        vc.stop_recording() 
+        del connections[ctx.guild.id]
+        await vc.disconnect()
+        await ctx.send("⏹️ تم إنهاء الجلسة ومغادرة الروم الصوتي.")
+    else:
+        await ctx.send("البوت لا يسجل حالياً.")
+
+# تشغيل سيرفر الويب المساعد أولاً ثم البوت
+keep_alive()
+bot.run("MTQ5ODM1ODAxMDI0NDc1OTcwMg.G0P_I2.w_3eHvn3RNAHk_wBJRKfqFxFhWVcVoy4n2VnSI")
